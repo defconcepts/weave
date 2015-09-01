@@ -23,7 +23,7 @@ const (
 
 	tickInterval         = time.Second * 5
 	MinSubnetSize        = 4 // first and last addresses are excluded, so 2 would be too small
-	containerDiedTimeout = time.Second * 5
+	containerDiedTimeout = time.Second * 30
 )
 
 // operation represents something which Allocator wants to do, but
@@ -236,6 +236,17 @@ func (alloc *Allocator) ContainerDied(ident string) {
 		// Also remove any pending ops
 		alloc.cancelOpsFor(&alloc.pendingAllocates, ident)
 		alloc.cancelOpsFor(&alloc.pendingClaims, ident)
+	}
+}
+
+// ContainerDestroyed called from the updater interface.  Async.
+func (alloc *Allocator) ContainerDestroyed(ident string) {
+	alloc.actionChan <- func() {
+		if _, found := alloc.lookupOwned(ident, alloc.universe); found {
+			alloc.debugln("Container", ident, "destroyed; removing addresses")
+			alloc.delete(ident)
+			delete(alloc.dead, ident)
+		}
 	}
 }
 
