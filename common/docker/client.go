@@ -9,6 +9,7 @@ import (
 type ContainerObserver interface {
 	ContainerStarted(ident string)
 	ContainerDied(ident string)
+	ContainerDestroyed(ident string)
 }
 
 type Client struct {
@@ -57,11 +58,11 @@ func (c *Client) AddObserver(ob ContainerObserver) error {
 		for event := range events {
 			switch event.Status {
 			case "start":
-				id := event.ID
-				ob.ContainerStarted(id)
+				ob.ContainerStarted(event.ID)
 			case "die":
-				id := event.ID
-				ob.ContainerDied(id)
+				ob.ContainerDied(event.ID)
+			case "destroy":
+				ob.ContainerDestroyed(event.ID)
 			}
 		}
 	}()

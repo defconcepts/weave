@@ -384,8 +384,8 @@ func (proxy *Proxy) waitForStartByIdent(ident string) error {
 	return nil
 }
 
-func (proxy *Proxy) ContainerDied(ident string) {
-}
+func (proxy *Proxy) ContainerDied(ident string)      {}
+func (proxy *Proxy) ContainerDestroyed(ident string) {}
 
 func (proxy *Proxy) attach(container *docker.Container, orDie bool) error {
 	cidrs, err := proxy.weaveCIDRs(container.HostConfig.NetworkMode, container.Config.Env)
