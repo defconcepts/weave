@@ -158,11 +158,12 @@ It works the same if you stop and immediately restart:
     host1$ docker stop a1
     host1$ docker start a1
 
-However, additional addresses added with the `weave attach` command
-will not be retained.
+However, if the container was connected to the weave network with
+`weave run` or with the `weave attach` command, any addresses assigned
+that way will not be retained.
 
-There is also a `weave restart` command, which does re-attach all
-current IP addresses:
+There is a `weave restart` command, which does re-attach all current
+IP addresses:
 
     host1$ weave restart b1
 
