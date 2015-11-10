@@ -3,16 +3,18 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"strings"
+	"text/template"
+
 	"github.com/gorilla/mux"
+
 	. "github.com/weaveworks/weave/common"
 	"github.com/weaveworks/weave/ipam"
 	"github.com/weaveworks/weave/mesh"
 	"github.com/weaveworks/weave/nameserver"
 	"github.com/weaveworks/weave/net/address"
 	weave "github.com/weaveworks/weave/router"
-	"net/http"
-	"strings"
-	"text/template"
 )
 
 var rootTemplate = template.New("root").Funcs(map[string]interface{}{
@@ -24,6 +26,12 @@ var rootTemplate = template.New("root").Funcs(map[string]interface{}{
 			}
 		}
 		return count
+	},
+	"upstreamServers": func(servers []string) string {
+		if len(servers) == 0 {
+			return "none"
+		}
+		return strings.Join(servers, ", ")
 	},
 	"printConnectionCounts": func(conns []mesh.LocalConnectionStatus) string {
 		counts := make(map[string]int)
@@ -108,6 +116,7 @@ var statusTemplate = defTemplate("status", `\
 
        Service: dns
         Domain: {{.DNS.Domain}}
+      Upstream: {{upstreamServers .DNS.Upstream}}
            TTL: {{.DNS.TTL}}
        Entries: {{countDNSEntries .DNS.Entries}}
 {{end}}\
