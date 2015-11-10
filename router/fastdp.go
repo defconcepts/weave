@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/weaveworks/go-odp/odp"
@@ -40,6 +41,7 @@ type FastDatapath struct {
 	dpif             *odp.Dpif
 	dp               odp.DatapathHandle
 	deleteFlowsCount uint64
+	missCount        uint64
 	missHandlers     map[odp.VportID]missHandler
 	localPeer        *mesh.Peer
 	peers            *mesh.Peers
@@ -216,8 +218,10 @@ func (fastdp fastDatapathBridge) String() string {
 	return fmt.Sprint(fastdp.dpname, " (via ODP)")
 }
 
-func (fastDatapathBridge) Stats() map[string]int {
-	return nil
+func (fastdp fastDatapathBridge) Stats() map[string]int {
+	return map[string]int{
+		"FlowMisses": (int)(atomic.LoadUint64(&fastdp.missCount)),
+	}
 }
 
 var routerBridgePortID = bridgePortID{router: true}
@@ -936,6 +940,8 @@ func (fastdp *FastDatapath) Miss(packet []byte, fks odp.FlowKeys) error {
 
 	lock := fastdp.startLock()
 	defer lock.unlock()
+
+	atomic.AddUint64(&(fastdp.missCount), 1)
 
 	handler := fastdp.getMissHandler(ingress)
 	if handler == nil {
