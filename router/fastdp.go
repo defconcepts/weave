@@ -219,7 +219,13 @@ func (fastdp fastDatapathBridge) String() string {
 }
 
 func (fastdp fastDatapathBridge) Stats() map[string]int {
+	flowsCount := 0
+	if flows, err := fastdp.dp.EnumerateFlows(); err == nil {
+		flowsCount = len(flows)
+	}
+
 	return map[string]int{
+		"FlowCount":  flowsCount,
 		"FlowMisses": (int)(atomic.LoadUint64(&fastdp.missCount)),
 	}
 }
