@@ -31,6 +31,11 @@ func (conn *mockChannelConnection) SendProtocolMsg(protocolMsg ProtocolMsg) {
 	}
 }
 
+func (conn *mockChannelConnection) SendOrDropProtocolMsg(protocolMsg ProtocolMsg) bool {
+	conn.SendProtocolMsg(protocolMsg)
+	return true
+}
+
 func sendPendingGossip(routers ...*Router) {
 	// Loop until all routers report they didn't send anything
 	for sentSomething := true; sentSomething; {

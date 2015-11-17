@@ -345,4 +345,5 @@ type ProtocolMsg struct {
 
 type ProtocolSender interface {
 	SendProtocolMsg(m ProtocolMsg)
+	SendOrDropProtocolMsg(m ProtocolMsg) bool
 }

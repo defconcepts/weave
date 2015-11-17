@@ -47,6 +47,7 @@ type LocalConnection struct {
 	heartbeatTCP *time.Ticker
 	Router       *Router
 	uid          uint64
+	sendChan     chan<- ProtocolMsg
 	actionChan   chan<- ConnectionAction
 	finished     <-chan struct{} // closed to signal that actorLoop has finished
 	OverlayConn  OverlayConnection
@@ -86,6 +87,7 @@ func StartLocalConnection(connRemote *RemoteConnection, tcpConn *net.TCPConn, ro
 	if connRemote.local != router.Ourself.Peer {
 		log.Fatal("Attempt to create local connection from a peer which is not ourself")
 	}
+	sendChan := make(chan ProtocolMsg, ChannelSize)
 	actionChan := make(chan ConnectionAction, ChannelSize)
 	finished := make(chan struct{})
 	conn := &LocalConnection{
@@ -93,9 +95,10 @@ func StartLocalConnection(connRemote *RemoteConnection, tcpConn *net.TCPConn, ro
 		Router:           router,
 		TCPConn:          tcpConn,
 		uid:              randUint64(),
+		sendChan:         sendChan,
 		actionChan:       actionChan,
 		finished:         finished}
-	go conn.run(actionChan, finished, acceptNewPeer)
+	go conn.run(sendChan, actionChan, finished, acceptNewPeer)
 }
 
 func (conn *LocalConnection) BreakTie(dupConn Connection) ConnectionTieBreak {
@@ -119,6 +122,15 @@ func (conn *LocalConnection) SendProtocolMsg(m ProtocolMsg) {
 	if err := conn.sendProtocolMsg(m); err != nil {
 		conn.Shutdown(err)
 	}
+}
+
+func (conn *LocalConnection) SendOrDropProtocolMsg(m ProtocolMsg) bool {
+	select {
+	case conn.sendChan <- m:
+		return true
+	default:
+	}
+	return false
 }
 
 // ACTOR methods
@@ -151,7 +163,7 @@ func (conn *LocalConnection) sendAction(action ConnectionAction) {
 
 // ACTOR server
 
-func (conn *LocalConnection) run(actionChan <-chan ConnectionAction, finished chan<- struct{}, acceptNewPeer bool) {
+func (conn *LocalConnection) run(sendChan <-chan ProtocolMsg, actionChan <-chan ConnectionAction, finished chan<- struct{}, acceptNewPeer bool) {
 	var err error // important to use this var and not create another one with 'err :='
 	defer func() { conn.shutdown(err) }()
 	defer close(finished)
@@ -197,6 +209,11 @@ func (conn *LocalConnection) run(actionChan <-chan ConnectionAction, finished ch
 	if conn.OverlayConn, err = conn.Router.Overlay.PrepareConnection(params); err != nil {
 		return
 	}
+
+	// AddConnection will typically cause some sending. Hence we spin
+	// up the sending go routine first, to that there is a reasonable
+	// chance SendOrDropProtocolMsg won't drop messages straight away.
+	go conn.sendTCP(sendChan)
 
 	// As soon as we do AddConnection, the new connection becomes
 	// visible to the packet routing logic.  So AddConnection must
@@ -391,6 +408,21 @@ func (conn *LocalConnection) sendSimpleProtocolMsg(tag ProtocolTag) error {
 
 func (conn *LocalConnection) sendProtocolMsg(m ProtocolMsg) error {
 	return conn.tcpSender.Send(append([]byte{byte(m.tag)}, m.msg...))
+}
+
+// We do the sending on a separate gorouting from the actorLoop since
+// we do not want to stall the actorLoop when sending blocks.
+func (conn *LocalConnection) sendTCP(sendChan <-chan ProtocolMsg) {
+	var err error
+	for err == nil {
+		select {
+		case m := <-sendChan:
+			err = conn.sendProtocolMsg(m)
+		case <-conn.finished:
+			return
+		}
+	}
+	conn.Shutdown(err)
 }
 
 func (conn *LocalConnection) receiveTCP(receiver TCPReceiver) {

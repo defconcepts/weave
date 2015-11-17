@@ -156,9 +156,6 @@ func (router *Router) sendPendingGossip() bool {
 		for _, sender := range channel.senders {
 			sentSomething = sender.flush() || sentSomething
 		}
-		for _, sender := range channel.broadcasters {
-			sentSomething = sender.flush() || sentSomething
-		}
 		channel.Unlock()
 	}
 	return sentSomething
